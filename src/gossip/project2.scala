@@ -128,8 +128,7 @@ object project2 {
         if(numActiveActors == 0){
           system.shutdown()
         }
-    
-     
+        
         
     }
   }
