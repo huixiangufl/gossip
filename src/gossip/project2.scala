@@ -43,16 +43,18 @@ object project2 {
     val system = ActorSystem("GossipCommunicationSystem")
 
     val nodes = new ListBuffer[ActorRef]()
-    for(i<-1 to numNodes)
+    for(i<-0 to numNodes-1){
       nodes += system.actorOf(Props[Node])
+    }
+    
     
     val checker = system.actorOf(Props[Checker])
 
     if ("full" == topology) {
 
-      for (i <- 1 to numNodes) {
+      for (i <- 0 to numNodes-1) {
         var neighborList: List[Int] = Nil
-        for (j <- 1 to numNodes) {
+        for (j <- 0 to numNodes-1) {
           if (j != i)
             neighborList = neighborList ::: List(j)
         }
@@ -63,7 +65,7 @@ object project2 {
     } else if ("2D" == topology) {
 
     } else if ("line" == topology) {
-
+      
     } else if ("imp2D" == topology) {
 
     } else {
