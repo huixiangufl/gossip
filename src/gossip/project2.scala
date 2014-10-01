@@ -60,11 +60,22 @@ object project2 {
         }
         nodes(i) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, system)
       }
-      checker ! IntializeChecker(nodes, numNodes, rumorLimit, system)
 
     } else if ("2D" == topology) {
 
-    } else if ("line" == topology) {
+    } else if ("line" == topology) {  
+      
+      //asssume the numNodes cannot be 1
+      for(i <- 0 to numNodes-1) {
+        var neighborList: List[Int] = Nil
+        if(0 == i)
+          neighborList = neighborList ::: List(1)
+        else if(numNodes-1 == i)
+          neighborList = neighborList ::: List(i-1)
+        else
+          neighborList = neighborList ::: List(i-1) ::: List(i+1)
+        nodes(i) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, system)
+      }
       
     } else if ("imp2D" == topology) {
 
@@ -72,6 +83,7 @@ object project2 {
       println("The topology you input is wrong, please select among full, 2D, line, imp2D.")
       System.exit(1)
     }
+    checker ! IntializeChecker(nodes, numNodes, rumorLimit, system)
 
   }
 
