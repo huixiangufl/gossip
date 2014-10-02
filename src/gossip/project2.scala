@@ -33,14 +33,19 @@ object project2 {
       System.exit(1)
     }
 
-    val numNodes: Int = args(0).toInt
-    val topology: String = args(1).toString()
-    val algorithm: String = args(2).toString()
+    var numNodes: Int = args(0).toInt
+    var topology: String = args(1).toString()
+    var algorithm: String = args(2).toString()
     
     var rumorLimit: Int = 10
 
 
     val system = ActorSystem("GossipCommunicationSystem")
+    
+    if("2D" == topology){
+      var gridSize: Int = sqrt(numNodes.toDouble).ceil.toInt
+      numNodes = gridSize * gridSize
+    }
 
     val nodes = new ListBuffer[ActorRef]()
     for(i<-0 to numNodes-1){
@@ -62,14 +67,20 @@ object project2 {
       }
 
     } else if ("2D" == topology) {
-
+      var gridSize: Int = sqrt(numNodes.toDouble).ceil.toInt
+      for(i <- 0 to gridSize-1){
+        for(j <- 0 to gridSize-1){
+          var neighborList: List[Int] = Nil
+          neighborList = genNeighborListfor2D(i, j, gridSize)
+          nodes(i*gridSize+j) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, system)
+        }
+      }
     } else if ("line" == topology) {  
-      
       //asssume the numNodes cannot be 1
       for(i <- 0 to numNodes-1) {
         var neighborList: List[Int] = Nil
         if(0 == i)
-          neighborList = neighborList ::: List(1)
+          neighborList = neighborList ::: List(i+1)
         else if(numNodes-1 == i)
           neighborList = neighborList ::: List(i-1)
         else
@@ -83,8 +94,36 @@ object project2 {
       println("The topology you input is wrong, please select among full, 2D, line, imp2D.")
       System.exit(1)
     }
-    checker ! IntializeChecker(nodes, numNodes, rumorLimit, system)
+    checker ! IntializeChecker(nodes, numNodes, rumorLimit, system)    
 
+
+  }
+
+  def genNeighborListfor2D(i: Int, j: Int, gridSize: Int): List[Int] = {
+    var neighborList: List[Int] = Nil
+    if (0 == i) {
+      if (0 == j)
+        neighborList = neighborList ::: List(j + 1) ::: List(j + gridSize)
+      else if (gridSize - 1 == j)
+        neighborList = neighborList ::: List(j - 1) ::: List(j + gridSize)
+      else
+        neighborList = neighborList ::: List(j - 1) ::: List(j + 1) ::: List(j + gridSize)
+    } else if (gridSize - 1 == i) {
+      if (0 == j)
+        neighborList = neighborList ::: List(i * gridSize + j + 1) ::: List(i * gridSize + j - gridSize)
+      else if (gridSize - 1 == j)
+        neighborList = neighborList ::: List(i * gridSize + j - 1) ::: List(i * gridSize + j - gridSize)
+      else
+        neighborList = neighborList ::: List(i * gridSize + j - 1) ::: List(i * gridSize + j + 1) ::: List(i * gridSize + j - gridSize)
+    } else {
+      if (0 == j)
+        neighborList = neighborList ::: List(i * gridSize + j + 1) ::: List(i * gridSize + j - gridSize) ::: List(i * gridSize + j + gridSize)
+      else if (gridSize - 1 == j)
+        neighborList = neighborList ::: List(i * gridSize + j - 1) ::: List(i * gridSize + j - gridSize) ::: List(i * gridSize + j + gridSize)
+      else
+        neighborList = neighborList ::: List(i * gridSize + j - 1) ::: List(i * gridSize + j + 1) ::: List(i * gridSize + j - gridSize) ::: List(i * gridSize + j + gridSize)
+    }
+    neighborList
   }
 
   class Node extends Actor {
