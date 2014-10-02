@@ -36,9 +36,7 @@ object project2 {
     var numNodes: Int = args(0).toInt
     var topology: String = args(1).toString()
     var algorithm: String = args(2).toString()
-    
     var rumorLimit: Int = 10
-
 
     val system = ActorSystem("GossipCommunicationSystem")
     
@@ -51,12 +49,10 @@ object project2 {
     for(i<-0 to numNodes-1){
       nodes += system.actorOf(Props[Node])
     }
-    
-    
+        
     val checker = system.actorOf(Props[Checker])
 
     if ("full" == topology) {
-
       for (i <- 0 to numNodes-1) {
         var neighborList: List[Int] = Nil
         for (j <- 0 to numNodes-1) {
@@ -75,6 +71,7 @@ object project2 {
           nodes(i*gridSize+j) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, system)
         }
       }
+      
     } else if ("line" == topology) {  
       //asssume the numNodes cannot be 1
       for(i <- 0 to numNodes-1) {
@@ -95,8 +92,6 @@ object project2 {
       System.exit(1)
     }
     checker ! IntializeChecker(nodes, numNodes, rumorLimit, system)    
-
-
   }
 
   def genNeighborListfor2D(i: Int, j: Int, gridSize: Int): List[Int] = {
@@ -179,8 +174,7 @@ object project2 {
         if(numActiveActors == 0){
           system.shutdown()
         }
-        
-        
+                
     }
   }
 
