@@ -25,6 +25,7 @@ case class Gossip() extends GossipMessage
 case class IntializeChecker(var _nodes: ListBuffer[ActorRef], var _numNodes: Int, var _rumorLimit: Int, var _system: ActorSystem)
 case class CheckGossipNumber() extends GossipMessage
 case class StopSystem() extends GossipMessage // not sure whether should use it
+case class UpdateNeighborList(var nodeName: String) extends GossipMessage
 
 object project2 {
 
@@ -37,7 +38,7 @@ object project2 {
     var numNodes: Int = args(0).toInt
     var topology: String = args(1).toString()
     var algorithm: String = args(2).toString()
-    var rumorLimit: Int = 10
+    var rumorLimit: Int = 3
 
     val system = ActorSystem("GossipCommunicationSystem")
     
@@ -48,10 +49,10 @@ object project2 {
 
     val nodes = new ListBuffer[ActorRef]()
     for(i<-0 to numNodes-1){
-      nodes += system.actorOf(Props[Node])
+      nodes += system.actorOf(Props[Node], name=i.toString)
     }
         
-    val checker = system.actorOf(Props[Checker])
+    val checker = system.actorOf(Props[Checker], name="Checker")
 
     if ("full" == topology) {
       for (i <- 0 to numNodes-1) {
@@ -83,6 +84,8 @@ object project2 {
           neighborList = neighborList ::: List(i-1)
         else
           neighborList = neighborList ::: List(i-1) ::: List(i+1)
+        //println(neighborList)
+        //println(neighborList.size)
         nodes(i) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, system)
       }
       
@@ -152,24 +155,48 @@ object project2 {
             checker = _checker
             system = _system
           }
+      
       case Gossip() => {
         if(sender() != self && receivedMessages == 0){//create a alarm scheduler to send message every interval
-          println("num: 0"+receivedMessages)
           receivedMessages += 1
           context.system.scheduler.schedule(0 milliseconds, 1000 milliseconds, self, Gossip())
+          //println("state 1: " + self.path.name + " receive message from " + sender().path.name)
         }else 
           if(sender() != self && receivedMessages < rumorLimit){//current node receives a message from another node
-            println("num: i"+receivedMessages)
             receivedMessages += 1
-            if(receivedMessages == rumorLimit)
+            //println("state 2: " + self.path.name + " receive message from " + sender().path.name)
+            if(receivedMessages == rumorLimit){
+              //first update the neighbor list
+              //second send the checker to check gossip number
+              //at last, stop the actor
+              println(self.path.name)
+              for(i <- 0 to neighborList.size){
+                nodes(neighborList(i)) ! UpdateNeighborList(self.path.name)
+              }
+              println(self.path.name+"test")
               checker ! CheckGossipNumber()
+              println(self.path.name+"test")
+              context.stop(self)
+            }
           }
           else
             if(sender() == self && receivedMessages < rumorLimit){//sends a message to another random neighbor
-              nodes(Random.nextInt(nodes.size)) ! Gossip()
+              var randNeighbor = neighborList(Random.nextInt(neighborList.size))
+              nodes(randNeighbor) ! Gossip()
+              println("state 3: " + self.path.name + " to "+nodes(randNeighbor).path.name+" messages: "+receivedMessages)
+//              nodes(Random.nextInt(nodes.size)) ! Gossip()
             }
       }
-         
+      
+      case UpdateNeighborList(nodeName) => {
+        neighborList = neighborList.filter(x => x != nodeName.toInt)
+        println("neighbors:" + neighborList)
+        if(0 == neighborList.size){
+          checker ! CheckGossipNumber()
+          context.stop(self)
+        }
+      }
+
     }
   }
 
@@ -191,7 +218,8 @@ object project2 {
       
       case CheckGossipNumber() =>
         numActiveActors -= 1
-        if(1 == numActiveActors){
+        println(sender())
+        if(0 == numActiveActors){
           println("convergence.")
           system.shutdown()
         }
