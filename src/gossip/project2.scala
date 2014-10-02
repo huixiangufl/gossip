@@ -1,6 +1,6 @@
 package gossip
 
-import akka.actor._
+import scala.concurrent.duration._
 import java.lang.NumberFormatException
 import akka.routing.RoundRobinRouter
 import java.security.MessageDigest
@@ -13,8 +13,9 @@ import akka.actor.Props
 import akka.actor._
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
-import akka.actor.Props
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.ExecutionContext.Implicits.global
+
 
 sealed trait GossipMessage
 case class IntializeNode(var _nodes: ListBuffer[ActorRef], 
@@ -91,7 +92,16 @@ object project2 {
       println("The topology you input is wrong, please select among full, 2D, line, imp2D.")
       System.exit(1)
     }
-    checker ! IntializeChecker(nodes, numNodes, rumorLimit, system)    
+    checker ! IntializeChecker(nodes, numNodes, rumorLimit, system)
+    
+    if("gossip" == algorithm){
+      nodes(0) ! Gossip()
+    }else if("push-sum" == algorithm){
+      
+    }else{
+      println("The algorithm you input is wrong, please select: gossip or push-sum.")
+      System.exit(1)
+    }
   }
 
   def genNeighborListfor2D(i: Int, j: Int, gridSize: Int): List[Int] = {
@@ -120,6 +130,7 @@ object project2 {
     }
     neighborList
   }
+  
 
   class Node extends Actor {
     
@@ -142,12 +153,21 @@ object project2 {
             system = _system
           }
       case Gossip() => {
-        if(receivedMessages < rumorLimit){
-          nodes(Random.nextInt(nodes.size)) ! Gossip
-        }
-        else {
-          checker ! CheckGossipNumber()
-        }
+        if(sender() != self && receivedMessages == 0){//create a alarm scheduler to send message every interval
+          println("num: 0"+receivedMessages)
+          receivedMessages += 1
+          context.system.scheduler.schedule(0 milliseconds, 1000 milliseconds, self, Gossip())
+        }else 
+          if(sender() != self && receivedMessages < rumorLimit){//current node receives a message from another node
+            println("num: i"+receivedMessages)
+            receivedMessages += 1
+            if(receivedMessages == rumorLimit)
+              checker ! CheckGossipNumber()
+          }
+          else
+            if(sender() == self && receivedMessages < rumorLimit){//sends a message to another random neighbor
+              nodes(Random.nextInt(nodes.size)) ! Gossip()
+            }
       }
          
     }
@@ -171,10 +191,10 @@ object project2 {
       
       case CheckGossipNumber() =>
         numActiveActors -= 1
-        if(numActiveActors == 0){
+        if(1 == numActiveActors){
+          println("convergence.")
           system.shutdown()
         }
-                
     }
   }
 
