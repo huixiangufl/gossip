@@ -188,7 +188,6 @@ object project2 {
       
       case UpdateNeighborList(nodeName) => {
         neighborList = neighborList.filter(x => x != nodeName.toInt)
-//        println("neighbors:" + neighborList)
         if(0 == neighborList.size){
           checker ! CheckActiveActor()
         }
