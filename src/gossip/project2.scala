@@ -5,6 +5,7 @@ import java.lang.NumberFormatException
 import akka.routing.RoundRobinRouter
 import java.security.MessageDigest
 import scala.util.control._
+import java.io._
 import java.net._
 import scala.math._
 import scala.util.Random
@@ -36,6 +37,8 @@ object project2 {
       println("Invalid number of arguments. Run with numNodes, topology and algorithm")
       System.exit(1)
     }
+    
+    val writer = new PrintWriter("test.txt")
 
     var numNodes: Int = args(0).toInt
     var topology: String = args(1).toString()
@@ -51,10 +54,11 @@ object project2 {
 
     val nodes = new ListBuffer[ActorRef]()
     for(i<-0 to numNodes-1){
-      nodes += system.actorOf(Props[Node], name=i.toString)
+      nodes += system.actorOf(Props(new Node(writer)), name=i.toString)
+      writer.println(nodes(i).path.name)
     }
         
-    val checker = system.actorOf(Props[Checker], name="Checker")
+    val checker = system.actorOf(Props(new Checker(writer)), name="Checker")
 
     if ("full" == topology) {
       for (i <- 0 to numNodes-1) {
@@ -86,8 +90,6 @@ object project2 {
           neighborList = neighborList ::: List(i-1)
         else
           neighborList = neighborList ::: List(i-1) ::: List(i+1)
-        //println(neighborList)
-        //println(neighborList.size)
         nodes(i) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, system)
       }
       
@@ -137,7 +139,7 @@ object project2 {
   }
   
 
-  class Node extends Actor {
+  class Node (var writer: PrintWriter) extends Actor {
     
     var receivedMessages: Int = 0
    
@@ -181,7 +183,7 @@ object project2 {
         if(sender() == self && receivedMessages < rumorLimit && neighborList.size > 0){
           //send message to another random neighbor
           var randNeighbor = neighborList(Random.nextInt(neighborList.size))
-          println(self.path.name + " to "+nodes(randNeighbor).path.name+" messages account: "+receivedMessages)
+          writer.println(self.path.name + " to "+nodes(randNeighbor).path.name+" messages account: "+receivedMessages)
           nodes(randNeighbor) ! ReceiveGossip()
         }
       }
@@ -193,13 +195,12 @@ object project2 {
         }
       }
       
-
     }
   }
 
-  class Checker extends Actor {
-    var numActiveActors = 0
+  class Checker (var writer: PrintWriter) extends Actor {
     var numActorStartSendingMessage = 0
+    var activeNodeList: List[String] = Nil
     
     var nodes = new ListBuffer[ActorRef]()
     var numNodes = 0
@@ -207,28 +208,33 @@ object project2 {
     var system: ActorSystem = null
     def receive = {
       case IntializeChecker(_nodes, _numNodes, _rumorLimit, _system) => {
-        numActiveActors = _numNodes
         nodes = _nodes
         numNodes = _numNodes
         rumorLimit = _rumorLimit
         system = _system
+        for(i <-0 to numNodes-1)
+          activeNodeList = activeNodeList ::: List(nodes(i).path.name)
       }
       
       case ActorStartSendingMessage() => {
         numActorStartSendingMessage += 1
         if(numActorStartSendingMessage == numNodes){
-          println("convergence. Situation 1.")
+          writer.println("convergence. Situation 1.")
           system.shutdown()
-          println("convergence.")
+          writer.println("convergence.")
+          writer.close()
         }
       }
       
       case CheckActiveActor() => {
-        numActiveActors -= 1
-        if(0 == numActiveActors){
-          println("convergence. Situation 2.")
+        writer.println("checkActiveActor" + sender().path.name)
+        activeNodeList = activeNodeList.filter(x => x != sender().path.name)
+        println(activeNodeList)
+        if (0 == activeNodeList.size) {
+          writer.println("convergence. Situation 2.")
           system.shutdown()
-          println("convegence.")
+          writer.println("convegence.")
+          writer.close()
         }
       }
       
