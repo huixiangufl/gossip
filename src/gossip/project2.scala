@@ -19,16 +19,20 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 
 sealed trait GossipMessage
+//messages for the node
 case class IntializeNode(var _nodes: ListBuffer[ActorRef], 
     var _neighborList: List[Int], var _numNodes: Int, 
     var _rumorLimit: Int, var _checker: ActorRef, var _system: ActorSystem)
 case class ReceiveGossip() extends GossipMessage
 case class SendGossip() extends GossipMessage
-case class IntializeChecker(var _nodes: ListBuffer[ActorRef], var _numNodes: Int, var _rumorLimit: Int, var _system: ActorSystem)
+case class UpdateNeighborList(var nodeName: String) extends GossipMessage
+
+//messages for the checker
+case class IntializeChecker(var _nodes: ListBuffer[ActorRef], 
+    var _numNodes: Int, var _rumorLimit: Int, var _system: ActorSystem)
 case class ActorStartSendingMessage() extends GossipMessage
 case class CheckActiveActor() extends GossipMessage
-case class StopSystem() extends GossipMessage // not sure whether should use it
-case class UpdateNeighborList(var nodeName: String) extends GossipMessage
+
 
 object project2 {
 
@@ -93,6 +97,7 @@ object project2 {
       }
       
     } else if ("imp2D" == topology) {
+      //implement here
 
     } else {
       println("The topology you input is wrong, please select among full, 2D, line, imp2D.")
@@ -103,7 +108,7 @@ object project2 {
     if("gossip" == algorithm){
       nodes(0) ! ReceiveGossip()
     }else if("push-sum" == algorithm){
-      
+      //implement push-sum algorithm
     }else{
       println("The algorithm you input is wrong, please select: gossip or push-sum.")
       System.exit(1)
