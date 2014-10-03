@@ -169,7 +169,7 @@ object project2 {
             //first send the checker to check the number of active actors
             checker ! CheckActiveActor()
             //second update the neighbor list of all current actor's neighbors
-            for(i <- 0 to neighborList.size)
+            for(i <- 0 to neighborList.size-1)
               nodes(neighborList(i)) ! UpdateNeighborList(self.path.name)
             //from now on, this actor is dead: 
             //we don't kill it, but it can't send and receive messages because of (receivedMessages < rumorLimit) condition 
@@ -230,7 +230,6 @@ object project2 {
           system.shutdown()
         }
       }
-
       
     }
   }
