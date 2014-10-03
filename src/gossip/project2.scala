@@ -40,7 +40,7 @@ object project2 {
     var numNodes: Int = args(0).toInt
     var topology: String = args(1).toString()
     var algorithm: String = args(2).toString()
-    var rumorLimit: Int = 3
+    var rumorLimit: Int = 10
 
     val system = ActorSystem("GossipCommunicationSystem")
     
@@ -162,7 +162,7 @@ object project2 {
         if(sender() != self && receivedMessages == 0){
           checker ! ActorStartSendingMessage()
           receivedMessages += 1
-          context.system.scheduler.schedule(0 milliseconds, 1000 milliseconds, self, SendGossip())
+          context.system.scheduler.schedule(0 milliseconds, 1 milliseconds, self, SendGossip())
         }else if(sender() != self && receivedMessages < rumorLimit){
           receivedMessages += 1
           if(receivedMessages == rumorLimit){
@@ -181,7 +181,7 @@ object project2 {
         if(sender() == self && receivedMessages < rumorLimit && neighborList.size > 0){
           //send message to another random neighbor
           var randNeighbor = neighborList(Random.nextInt(neighborList.size))
-          println(self.path.name + " to "+nodes(randNeighbor).path.name+" messages: "+receivedMessages)
+          println(self.path.name + " to "+nodes(randNeighbor).path.name+" messages account: "+receivedMessages)
           nodes(randNeighbor) ! ReceiveGossip()
         }
       }
@@ -220,6 +220,7 @@ object project2 {
         if(numActorStartSendingMessage == numNodes){
           println("convergence. Situation 1.")
           system.shutdown()
+          println("convergence.")
         }
       }
       
@@ -228,6 +229,7 @@ object project2 {
         if(0 == numActiveActors){
           println("convergence. Situation 2.")
           system.shutdown()
+          println("convegence.")
         }
       }
       
