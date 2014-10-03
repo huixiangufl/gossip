@@ -21,9 +21,11 @@ sealed trait GossipMessage
 case class IntializeNode(var _nodes: ListBuffer[ActorRef], 
     var _neighborList: List[Int], var _numNodes: Int, 
     var _rumorLimit: Int, var _checker: ActorRef, var _system: ActorSystem)
-case class Gossip() extends GossipMessage
+case class ReceiveGossip() extends GossipMessage
+case class SendGossip() extends GossipMessage
 case class IntializeChecker(var _nodes: ListBuffer[ActorRef], var _numNodes: Int, var _rumorLimit: Int, var _system: ActorSystem)
-case class CheckGossipNumber() extends GossipMessage
+case class ActorStartSendingMessage() extends GossipMessage
+case class CheckActiveActor() extends GossipMessage
 case class StopSystem() extends GossipMessage // not sure whether should use it
 case class UpdateNeighborList(var nodeName: String) extends GossipMessage
 
@@ -98,7 +100,7 @@ object project2 {
     checker ! IntializeChecker(nodes, numNodes, rumorLimit, system)
     
     if("gossip" == algorithm){
-      nodes(0) ! Gossip()
+      nodes(0) ! ReceiveGossip()
     }else if("push-sum" == algorithm){
       
     }else{
@@ -156,52 +158,49 @@ object project2 {
             system = _system
           }
       
-      case Gossip() => {
-        if(sender() != self && receivedMessages == 0){//create a alarm scheduler to send message every interval
+      case ReceiveGossip() => {
+        if(sender() != self && receivedMessages == 0){
+          checker ! ActorStartSendingMessage()
           receivedMessages += 1
-          context.system.scheduler.schedule(0 milliseconds, 1000 milliseconds, self, Gossip())
-          //println("state 1: " + self.path.name + " receive message from " + sender().path.name)
-        }else 
-          if(sender() != self && receivedMessages < rumorLimit){//current node receives a message from another node
-            receivedMessages += 1
-            //println("state 2: " + self.path.name + " receive message from " + sender().path.name)
-            if(receivedMessages == rumorLimit){
-              //first update the neighbor list
-              //second send the checker to check gossip number
-              //at last, stop the actor
-              println(self.path.name)
-              for(i <- 0 to neighborList.size){
-                nodes(neighborList(i)) ! UpdateNeighborList(self.path.name)
-              }
-              println(self.path.name+"test")
-              checker ! CheckGossipNumber()
-              println(self.path.name+"test")
-              context.stop(self)
-            }
+          context.system.scheduler.schedule(0 milliseconds, 1000 milliseconds, self, SendGossip())
+        }else if(sender() != self && receivedMessages < rumorLimit){
+          receivedMessages += 1
+          if(receivedMessages == rumorLimit){
+            //first send the checker to check the number of active actors
+            checker ! CheckActiveActor()
+            //second update the neighbor list of all current actor's neighbors
+            for(i <- 0 to neighborList.size)
+              nodes(neighborList(i)) ! UpdateNeighborList(self.path.name)
+            //from now on, this actor is dead: 
+            //we don't kill it, but it can't send and receive messages because of (receivedMessages < rumorLimit) condition 
           }
-          else
-            if(sender() == self && receivedMessages < rumorLimit){//sends a message to another random neighbor
-              var randNeighbor = neighborList(Random.nextInt(neighborList.size))
-              nodes(randNeighbor) ! Gossip()
-              println("state 3: " + self.path.name + " to "+nodes(randNeighbor).path.name+" messages: "+receivedMessages)
-//              nodes(Random.nextInt(nodes.size)) ! Gossip()
-            }
+        }
+      }
+      
+      case SendGossip() => {
+        if(sender() == self && receivedMessages < rumorLimit && neighborList.size > 0){
+          //send message to another random neighbor
+          var randNeighbor = neighborList(Random.nextInt(neighborList.size))
+          println(self.path.name + " to "+nodes(randNeighbor).path.name+" messages: "+receivedMessages)
+          nodes(randNeighbor) ! ReceiveGossip()
+        }
       }
       
       case UpdateNeighborList(nodeName) => {
         neighborList = neighborList.filter(x => x != nodeName.toInt)
-        println("neighbors:" + neighborList)
+//        println("neighbors:" + neighborList)
         if(0 == neighborList.size){
-          checker ! CheckGossipNumber()
-          context.stop(self)
+          checker ! CheckActiveActor()
         }
       }
+      
 
     }
   }
 
   class Checker extends Actor {
     var numActiveActors = 0
+    var numActorStartSendingMessage = 0
     
     var nodes = new ListBuffer[ActorRef]()
     var numNodes = 0
@@ -216,13 +215,23 @@ object project2 {
         system = _system
       }
       
-      case CheckGossipNumber() =>
-        numActiveActors -= 1
-        println(sender())
-        if(0 == numActiveActors){
-          println("convergence.")
+      case ActorStartSendingMessage() => {
+        numActorStartSendingMessage += 1
+        if(numActorStartSendingMessage == numNodes){
+          println("convergence. Situation 1.")
           system.shutdown()
         }
+      }
+      
+      case CheckActiveActor() => {
+        numActiveActors -= 1
+        if(0 == numActiveActors){
+          println("convergence. Situation 2.")
+          system.shutdown()
+        }
+      }
+
+      
     }
   }
 
