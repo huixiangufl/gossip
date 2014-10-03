@@ -55,7 +55,6 @@ object project2 {
     val nodes = new ListBuffer[ActorRef]()
     for(i<-0 to numNodes-1){
       nodes += system.actorOf(Props(new Node(writer)), name=i.toString)
-      writer.println(nodes(i).path.name)
     }
         
     val checker = system.actorOf(Props(new Checker(writer)), name="Checker")
@@ -221,7 +220,6 @@ object project2 {
         if(numActorStartSendingMessage == numNodes){
           writer.println("convergence. Situation 1.")
           system.shutdown()
-          writer.println("convergence.")
           writer.close()
         }
       }
@@ -229,11 +227,9 @@ object project2 {
       case CheckActiveActor() => {
         writer.println("checkActiveActor" + sender().path.name)
         activeNodeList = activeNodeList.filter(x => x != sender().path.name)
-        println(activeNodeList)
         if (0 == activeNodeList.size) {
           writer.println("convergence. Situation 2.")
           system.shutdown()
-          writer.println("convegence.")
           writer.close()
         }
       }
