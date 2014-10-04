@@ -52,7 +52,7 @@ object project2 {
 
     val system = ActorSystem("GossipCommunicationSystem")
     
-    if("2D" == topology){
+    if("2D" == topology || "imp2D" == topology){
       var gridSize: Int = sqrt(numNodes.toDouble).ceil.toInt
       numNodes = gridSize * gridSize
     }
@@ -99,6 +99,16 @@ object project2 {
       
     } else if ("imp2D" == topology) {
       //implement here
+      var gridSize: Int = sqrt(numNodes.toDouble).ceil.toInt
+      for(i <-0 to gridSize-1){
+        for(j <- 0 to gridSize-1){
+          var neighborList: List[Int] = Nil
+          neighborList = genNeighborListfor2D(i, j, gridSize)
+          var theLastNeighbor: Int = genRandExceptCurrent(0, numNodes-1, i*gridSize+j)
+          neighborList = neighborList ::: List(theLastNeighbor)
+          println(neighborList)
+        }
+      }
 
     } else {
       println("The topology you input is wrong, please select among full, 2D, line, imp2D.")
@@ -114,6 +124,14 @@ object project2 {
       println("The algorithm you input is wrong, please select: gossip or push-sum.")
       System.exit(1)
     }
+  }
+  
+  //generate a random number between first to current-1 and current+1 to last
+  def genRandExceptCurrent(first: Int, last: Int, current: Int): Int = {
+    val range1 = first to current-1
+    val range2 = current+1 to last
+    val range: List[Int] = range1.toList ::: range2.toList
+    range(Random.nextInt(range.size))
   }
 
   def genNeighborListfor2D(i: Int, j: Int, gridSize: Int): List[Int] = {
