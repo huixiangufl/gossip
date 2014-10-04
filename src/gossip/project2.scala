@@ -26,8 +26,8 @@ case class IntializeGossipNode(var _nodes: ListBuffer[ActorRef],
     var _topology: String, var _system: ActorSystem)
 case class IntializePushSumNode(var _nodes: ListBuffer[ActorRef], 
     var _neighborList: List[Int], var _numNodes: Int, 
-    var _s: Int, var _w: Int, var _checker: ActorRef, 
-    var _topology: String, var _system: ActorSystem)
+    var _s: Int, var _w: Int, var _changeLimit: Int,
+    var _checker: ActorRef, var _topology: String, var _system: ActorSystem)
 case class ReceiveGossip() extends GossipMessage
 case class ReceivePushSum(_s: Double, _w: Double) extends GossipMessage
 case class SendGossip() extends GossipMessage
@@ -54,7 +54,8 @@ object project2 {
     var numNodes: Int = args(0).toInt
     var topology: String = args(1).toString()
     var algorithm: String = args(2).toString()
-    var rumorLimit: Int = 10
+    var rumorLimit: Int = 10		//for gossip
+    var changeLimit: Int = 3		//for push-sum
 
     val system = ActorSystem("GossipCommunicationSystem")
     
@@ -80,7 +81,7 @@ object project2 {
         if("gossip" == algorithm)
           nodes(i) ! IntializeGossipNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
         if("push-sum" == algorithm)
-          nodes(i) ! IntializePushSumNode(nodes, neighborList, numNodes, i, 1, checker, topology, system)
+          nodes(i) ! IntializePushSumNode(nodes, neighborList, numNodes, i, 1, changeLimit, checker, topology, system)
       }
 
     } else if ("2D" == topology) {
@@ -92,7 +93,7 @@ object project2 {
           if("gossip" == algorithm)
             nodes(i*gridSize+j) ! IntializeGossipNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
           if("push-sum" == algorithm)
-            nodes(i*gridSize+j) ! IntializePushSumNode(nodes, neighborList, numNodes, i*gridSize+j, 1, checker, topology, system)
+            nodes(i*gridSize+j) ! IntializePushSumNode(nodes, neighborList, numNodes, i*gridSize+j, 1, changeLimit, checker, topology, system)
         }
       }
       
@@ -109,7 +110,7 @@ object project2 {
           if("gossip" == algorithm)
             nodes(i) ! IntializeGossipNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
           if("push-sum" == algorithm)
-            nodes(i) ! IntializePushSumNode(nodes, neighborList, numNodes, i, 1, checker, topology, system)
+            nodes(i) ! IntializePushSumNode(nodes, neighborList, numNodes, i, 1, changeLimit, checker, topology, system)
       }
       
     } else if ("imp2D" == topology) {
@@ -126,7 +127,7 @@ object project2 {
           if("gossip" == algorithm)
             nodes(i*gridSize+j) ! IntializeGossipNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
           if("push-sum" == algorithm)
-            nodes(i*gridSize+j) ! IntializePushSumNode(nodes, neighborList, numNodes, i*gridSize+j, 1, checker, topology, system)
+            nodes(i*gridSize+j) ! IntializePushSumNode(nodes, neighborList, numNodes, i*gridSize+j, 1, changeLimit, checker, topology, system)
         }
       }
       
@@ -203,6 +204,7 @@ object project2 {
     var changeCounter: Int = 0
     var pushSumThreshold: Double = Math.pow(10, -10)
     var sumEstimate: Double = 0
+    var changeLimit: Int = 0
     
     def receive = {
       case IntializeGossipNode(_nodes, _neighborList,  _numNodes, _rumorLimit, _checker, _topology, _system) => {
@@ -215,12 +217,13 @@ object project2 {
             system = _system
           }
       
-      case IntializePushSumNode(_nodes, _neighborList, _numNodes, _s, _w, _checker, _topology, _system) => {
+      case IntializePushSumNode(_nodes, _neighborList, _numNodes, _s, _w, _changeLimit, _checker, _topology, _system) => {
         nodes = _nodes
         neighborList = _neighborList
         numNodes = _numNodes
         s = _s
         w = _w
+        changeLimit = _changeLimit
         sumEstimate = s/w
         checker = _checker
         topology = _topology
@@ -270,7 +273,7 @@ object project2 {
           w += _w
           sumEstimate = s/w
           context.system.scheduler.schedule(0 milliseconds, 1 milliseconds, self, SendPushSum(s, w))
-        } else if(sender() != self && changeCounter < 3 && neighborList.size > 0){
+        } else if(sender() != self && changeCounter < changeLimit && neighborList.size > 0){
           receivedMessages += 1
           var oldSumEstimate: Double = s/w
           
@@ -285,7 +288,7 @@ object project2 {
             else
               changeCounter = 0
           
-          if(changeCounter >= 3){
+          if(changeCounter >= changeLimit){
             writer.println("sum estimate for "+self.path.name+ " while dying is: "+sumEstimate)
             //deactive this actor
             checker ! CheckActiveActor()
@@ -297,7 +300,7 @@ object project2 {
       }
       
       case SendPushSum(_s: Double, _w: Double) => {
-        if(sender() == self && changeCounter < 3 && neighborList.size > 0){
+        if(sender() == self && changeCounter < changeLimit && neighborList.size > 0){
           s = s/2
           w = w/2
           var randNeighbor = neighborList(Random.nextInt(neighborList.size))
