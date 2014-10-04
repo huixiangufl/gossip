@@ -17,7 +17,6 @@ import akka.actor.ActorSystem
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 
-
 sealed trait GossipMessage
 //messages for the node
 case class IntializeNode(var _nodes: ListBuffer[ActorRef], 
