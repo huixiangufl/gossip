@@ -20,17 +20,23 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 sealed trait GossipMessage
 //messages for the node
-case class IntializeNode(var _nodes: ListBuffer[ActorRef], 
+case class IntializeGossipNode(var _nodes: ListBuffer[ActorRef], 
     var _neighborList: List[Int], var _numNodes: Int, 
     var _rumorLimit: Int, var _checker: ActorRef, 
     var _topology: String, var _system: ActorSystem)
+case class IntializePushSumNode(var _nodes: ListBuffer[ActorRef], 
+    var _neighborList: List[Int], var _numNodes: Int, 
+    var _s: Int, var _w: Int, var _checker: ActorRef, 
+    var _topology: String, var _system: ActorSystem)
 case class ReceiveGossip() extends GossipMessage
+case class ReceivePushSum(_s: Double, _w: Double) extends GossipMessage
 case class SendGossip() extends GossipMessage
+case class SendPushSum(_s: Double, _w: Double) extends GossipMessage
 case class UpdateNeighborList(var nodeName: String) extends GossipMessage
 
 //messages for the checker
 case class IntializeChecker(var _nodes: ListBuffer[ActorRef], 
-    var _numNodes: Int, var _rumorLimit: Int, var _system: ActorSystem)
+    var _numNodes: Int, var _system: ActorSystem)
 case class ActorStartSendingMessage() extends GossipMessage
 case class CheckActiveActor() extends GossipMessage
 
@@ -71,7 +77,10 @@ object project2 {
           if (j != i)
             neighborList = neighborList ::: List(j)
         }
-        nodes(i) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
+        if("gossip" == algorithm)
+          nodes(i) ! IntializeGossipNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
+        if("push-sum" == algorithm)
+          nodes(i) ! IntializePushSumNode(nodes, neighborList, numNodes, i, 1, checker, topology, system)
       }
 
     } else if ("2D" == topology) {
@@ -80,7 +89,10 @@ object project2 {
         for(j <- 0 to gridSize-1){
           var neighborList: List[Int] = Nil
           neighborList = genNeighborListfor2D(i, j, gridSize)
-          nodes(i*gridSize+j) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
+          if("gossip" == algorithm)
+            nodes(i*gridSize+j) ! IntializeGossipNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
+          if("push-sum" == algorithm)
+            nodes(i*gridSize+j) ! IntializePushSumNode(nodes, neighborList, numNodes, i*gridSize+j, 1, checker, topology, system)
         }
       }
       
@@ -94,32 +106,40 @@ object project2 {
           neighborList = neighborList ::: List(i-1)
         else
           neighborList = neighborList ::: List(i-1) ::: List(i+1)
-        nodes(i) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
+          if("gossip" == algorithm)
+            nodes(i) ! IntializeGossipNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
+          if("push-sum" == algorithm)
+            nodes(i) ! IntializePushSumNode(nodes, neighborList, numNodes, i, 1, checker, topology, system)
       }
       
     } else if ("imp2D" == topology) {
-      //implement here
       var gridSize: Int = sqrt(numNodes.toDouble).ceil.toInt
       for(i <-0 to gridSize-1){
         for(j <- 0 to gridSize-1){
           var neighborList: List[Int] = Nil
           neighborList = genNeighborListfor2D(i, j, gridSize)
-          var theLastNeighbor: Int = genRandExceptCurrent(0, numNodes-1, i*gridSize+j)
+          var theLastNeighbor: Int = genRandExceptCur(0, numNodes-1, i*gridSize+j)
+          while(neighborList.contains(theLastNeighbor)){
+            theLastNeighbor = genRandExceptCur(0, numNodes-1, i*gridSize+j)
+          }
           neighborList = neighborList ::: List(theLastNeighbor)
-          println(neighborList)
+          if("gossip" == algorithm)
+            nodes(i*gridSize+j) ! IntializeGossipNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
+          if("push-sum" == algorithm)
+            nodes(i*gridSize+j) ! IntializePushSumNode(nodes, neighborList, numNodes, i*gridSize+j, 1, checker, topology, system)
         }
       }
-
+      
     } else {
       println("The topology you input is wrong, please select among full, 2D, line, imp2D.")
       System.exit(1)
     }
-    checker ! IntializeChecker(nodes, numNodes, rumorLimit, system)
+    checker ! IntializeChecker(nodes, numNodes, system)
     
     if("gossip" == algorithm){
       nodes(0) ! ReceiveGossip()
     }else if("push-sum" == algorithm){
-      //implement push-sum
+      nodes(0) ! ReceivePushSum(0, 0)
     }else{
       println("The algorithm you input is wrong, please select: gossip or push-sum.")
       System.exit(1)
@@ -127,7 +147,7 @@ object project2 {
   }
   
   //generate a random number between first to current-1 and current+1 to last
-  def genRandExceptCurrent(first: Int, last: Int, current: Int): Int = {
+  def genRandExceptCur(first: Int, last: Int, current: Int): Int = {
     val range1 = first to current-1
     val range2 = current+1 to last
     val range: List[Int] = range1.toList ::: range2.toList
@@ -163,18 +183,28 @@ object project2 {
   
 
   class Node (var writer: PrintWriter) extends Actor {
-    var receivedMessages: Int = 0
+
     var topology: String = null
    
     var nodes = new ListBuffer[ActorRef]()
     var neighborList: List[Int] = Nil
     var numNodes = 0
-    var rumorLimit = 0
     var checker: ActorRef = null
     var system: ActorSystem = null
+    var receivedMessages: Int = 0
+    
+    //variables for gossip algorithm
+    var rumorLimit: Int = 0
+    
+    //variables for push-sum algorithm
+    var s: Double = 0
+    var w: Double = 0
+    var changeCounter: Int = 0
+    var pushSumThreshold: Double = Math.pow(10, -10)
+    var sumEstimate: Double = 0
     
     def receive = {
-      case IntializeNode(_nodes, _neighborList,  _numNodes, _rumorLimit, _checker, _topology, _system) => {
+      case IntializeGossipNode(_nodes, _neighborList,  _numNodes, _rumorLimit, _checker, _topology, _system) => {
             nodes = _nodes
             neighborList = _neighborList
             numNodes = _numNodes
@@ -183,6 +213,18 @@ object project2 {
             topology = _topology
             system = _system
           }
+      
+      case IntializePushSumNode(_nodes, _neighborList, _numNodes, _s, _w, _checker, _topology, _system) => {
+        nodes = _nodes
+        neighborList = _neighborList
+        numNodes = _numNodes
+        s = _s
+        w = _w
+        sumEstimate = s/w
+        checker = _checker
+        topology = _topology
+        system = _system
+      }
 
       case ReceiveGossip() => {
         if (sender() != self && receivedMessages == 0 && neighborList.size > 0) {
@@ -220,6 +262,49 @@ object project2 {
         }
       }
       
+      case ReceivePushSum(_s: Double, _w: Double) => {
+        if(sender() != self &&  receivedMessages == 0){
+          receivedMessages += 1
+          s += _s
+          w += _w
+          sumEstimate = s/w
+          context.system.scheduler.schedule(0 milliseconds, 1 milliseconds, self, SendPushSum(s, w))
+        } else if(sender() != self && changeCounter < 3 && neighborList.size > 0){
+          receivedMessages += 1
+          var oldSumEstimate: Double = s/w
+          
+          s += _s
+          w += _w
+          sumEstimate = s/w
+          
+          //println("sum estimate for "+self.path.name+ " is: "+sumEstimate)
+          
+          if(Math.abs(sumEstimate - oldSumEstimate) < pushSumThreshold)
+            changeCounter +=1
+            else
+              changeCounter = 0
+          
+          if(changeCounter >= 3){
+            println("sum estimate for "+self.path.name+ " while dying is: "+sumEstimate)
+            //deactive this actor
+            checker ! CheckActiveActor()
+            for(i <- 0 to neighborList.size-1)
+	            nodes(neighborList(i)) ! UpdateNeighborList(self.path.name)
+          }
+          
+        }
+      }
+      
+      case SendPushSum(_s: Double, _w: Double) => {
+        if(sender() == self && changeCounter < 3 && neighborList.size > 0){
+          s = s/2
+          w = w/2
+          var randNeighbor = neighborList(Random.nextInt(neighborList.size))
+          nodes(randNeighbor) ! ReceivePushSum(s, w)
+        }
+      }
+
+      
       case UpdateNeighborList(nodeName) => {
         neighborList = neighborList.filter(x => x != nodeName.toInt)
         if(0 == neighborList.size){
@@ -238,13 +323,11 @@ object project2 {
     
     var nodes = new ListBuffer[ActorRef]()
     var numNodes = 0
-    var rumorLimit = 0
     var system: ActorSystem = null
     def receive = {
-      case IntializeChecker(_nodes, _numNodes, _rumorLimit, _system) => {
+      case IntializeChecker(_nodes, _numNodes, _system) => {
         nodes = _nodes
         numNodes = _numNodes
-        rumorLimit = _rumorLimit
         system = _system
         for(i <-0 to numNodes-1)
           activeNodeList = activeNodeList ::: List(nodes(i).path.name)
@@ -262,6 +345,7 @@ object project2 {
       case CheckActiveActor() => {
         writer.println("checkActiveActor" + sender().path.name)
         activeNodeList = activeNodeList.filter(x => x != sender().path.name)
+        println("still active nodes:"+activeNodeList.size)
         if (0 == activeNodeList.size) {
           writer.println("convergence. Situation 2.")
           system.shutdown()
@@ -271,5 +355,4 @@ object project2 {
       
     }
   }
-
 }
