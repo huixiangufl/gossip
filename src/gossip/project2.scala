@@ -136,10 +136,11 @@ object project2 {
     }
     checker ! IntializeChecker(nodes, numNodes, system)
     
+    //select a random node and start spreading messages
     if("gossip" == algorithm){
-      nodes(0) ! ReceiveGossip()
+      nodes(Random.nextInt(nodes.size)) ! ReceiveGossip()
     }else if("push-sum" == algorithm){
-      nodes(0) ! ReceivePushSum(0, 0)
+      nodes(Random.nextInt(nodes.size)) ! ReceivePushSum(0, 0)
     }else{
       println("The algorithm you input is wrong, please select: gossip or push-sum.")
       System.exit(1)
@@ -277,7 +278,7 @@ object project2 {
           w += _w
           sumEstimate = s/w
           
-          //println("sum estimate for "+self.path.name+ " is: "+sumEstimate)
+          writer.println("sum estimate for "+self.path.name+ " is: "+sumEstimate)
           
           if(Math.abs(sumEstimate - oldSumEstimate) < pushSumThreshold)
             changeCounter +=1
@@ -285,7 +286,7 @@ object project2 {
               changeCounter = 0
           
           if(changeCounter >= 3){
-            println("sum estimate for "+self.path.name+ " while dying is: "+sumEstimate)
+            writer.println("sum estimate for "+self.path.name+ " while dying is: "+sumEstimate)
             //deactive this actor
             checker ! CheckActiveActor()
             for(i <- 0 to neighborList.size-1)
