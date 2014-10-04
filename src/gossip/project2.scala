@@ -22,7 +22,8 @@ sealed trait GossipMessage
 //messages for the node
 case class IntializeNode(var _nodes: ListBuffer[ActorRef], 
     var _neighborList: List[Int], var _numNodes: Int, 
-    var _rumorLimit: Int, var _checker: ActorRef, var _system: ActorSystem)
+    var _rumorLimit: Int, var _checker: ActorRef, 
+    var _topology: String, var _system: ActorSystem)
 case class ReceiveGossip() extends GossipMessage
 case class SendGossip() extends GossipMessage
 case class UpdateNeighborList(var nodeName: String) extends GossipMessage
@@ -70,7 +71,7 @@ object project2 {
           if (j != i)
             neighborList = neighborList ::: List(j)
         }
-        nodes(i) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, system)
+        nodes(i) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
       }
 
     } else if ("2D" == topology) {
@@ -79,7 +80,7 @@ object project2 {
         for(j <- 0 to gridSize-1){
           var neighborList: List[Int] = Nil
           neighborList = genNeighborListfor2D(i, j, gridSize)
-          nodes(i*gridSize+j) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, system)
+          nodes(i*gridSize+j) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
         }
       }
       
@@ -93,7 +94,7 @@ object project2 {
           neighborList = neighborList ::: List(i-1)
         else
           neighborList = neighborList ::: List(i-1) ::: List(i+1)
-        nodes(i) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, system)
+        nodes(i) ! IntializeNode(nodes, neighborList, numNodes, rumorLimit, checker, topology, system)
       }
       
     } else if ("imp2D" == topology) {
@@ -108,7 +109,7 @@ object project2 {
     if("gossip" == algorithm){
       nodes(0) ! ReceiveGossip()
     }else if("push-sum" == algorithm){
-      //implement push-sum algorithm
+      //implement push-sum
     }else{
       println("The algorithm you input is wrong, please select: gossip or push-sum.")
       System.exit(1)
@@ -144,8 +145,8 @@ object project2 {
   
 
   class Node (var writer: PrintWriter) extends Actor {
-    
     var receivedMessages: Int = 0
+    var topology: String = null
    
     var nodes = new ListBuffer[ActorRef]()
     var neighborList: List[Int] = Nil
@@ -155,27 +156,36 @@ object project2 {
     var system: ActorSystem = null
     
     def receive = {
-      case IntializeNode(_nodes, _neighborList,  _numNodes, _rumorLimit, _checker, _system) => {
+      case IntializeNode(_nodes, _neighborList,  _numNodes, _rumorLimit, _checker, _topology, _system) => {
             nodes = _nodes
             neighborList = _neighborList
             numNodes = _numNodes
             rumorLimit = _rumorLimit
             checker = _checker
+            topology = _topology
             system = _system
           }
-      
+
       case ReceiveGossip() => {
-        if(sender() != self && receivedMessages == 0){
+        if (sender() != self && receivedMessages == 0 && neighborList.size > 0) {
           checker ! ActorStartSendingMessage()
           receivedMessages += 1
           context.system.scheduler.schedule(0 milliseconds, 1 milliseconds, self, SendGossip())
-        }else if(sender() != self && receivedMessages < rumorLimit){
+        } else if (sender() != self && receivedMessages < rumorLimit && neighborList.size > 0) {
           receivedMessages += 1
-          if(receivedMessages == rumorLimit){
-            //first send the checker to check the number of active actors
+          if (receivedMessages == rumorLimit) {
+//            //to solve problem in line topo: 0-1-2-3-4-5, when 0 and 1 receives enough messages and dead
+//            //the rest of the network cannot receive gossip any more, and stuck
+//            if ("line" == topology) {
+//              for (i <- 0 to neighborList.size - 1) {
+//                if (0 == nodes(neighborList(i)).receivedMessages)
+//                  nodes(neighborList(i)) ! ReceiveGossip()
+//              }
+//            }
+            //send the checker to check the number of active actors
             checker ! CheckActiveActor()
-            //second update the neighbor list of all current actor's neighbors
-            for(i <- 0 to neighborList.size-1)
+            //update the neighbor list of all current actor's neighbors
+            for (i <- 0 to neighborList.size - 1)
               nodes(neighborList(i)) ! UpdateNeighborList(self.path.name)
             //from now on, this actor is dead: 
             //we don't kill it, but it can't send and receive messages because of (receivedMessages < rumorLimit) condition 
@@ -185,7 +195,7 @@ object project2 {
       
       case SendGossip() => {
         if(sender() == self && receivedMessages < rumorLimit && neighborList.size > 0){
-          //send message to another random neighbor
+          //send message to a random neighbor
           var randNeighbor = neighborList(Random.nextInt(neighborList.size))
           writer.println(self.path.name + " to "+nodes(randNeighbor).path.name+" messages account: "+receivedMessages)
           nodes(randNeighbor) ! ReceiveGossip()
@@ -196,6 +206,8 @@ object project2 {
         neighborList = neighborList.filter(x => x != nodeName.toInt)
         if(0 == neighborList.size){
           checker ! CheckActiveActor()
+          //neighorList.size==0 also means this node is dead
+          //we don't kill it, but it cann't send and receive messages because of (neighborList.size > 0) condition
         }
       }
       
