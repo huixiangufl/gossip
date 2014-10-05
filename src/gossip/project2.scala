@@ -49,6 +49,7 @@ object project2 {
       System.exit(1)
     }
     
+    
     val writer = new PrintWriter("test.txt")
 
     var numNodes: Int = args(0).toInt
