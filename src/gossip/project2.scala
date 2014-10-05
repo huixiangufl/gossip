@@ -36,7 +36,7 @@ case class UpdateNeighborList(var nodeName: String) extends GossipMessage
 
 //messages for the checker
 case class IntializeChecker(var _nodes: ListBuffer[ActorRef], 
-    var _numNodes: Int, var _system: ActorSystem)
+    var _numNodes: Int, var _system: ActorSystem, var _startTime: Long)
 case class ActorStartSendingMessage() extends GossipMessage
 case class CheckActiveActor() extends GossipMessage
 
@@ -135,7 +135,8 @@ object project2 {
       println("The topology you input is wrong, please select among full, 2D, line, imp2D.")
       System.exit(1)
     }
-    checker ! IntializeChecker(nodes, numNodes, system)
+    val startTime = System.currentTimeMillis()
+    checker ! IntializeChecker(nodes, numNodes, system, startTime)
     
     //select a random node and start spreading messages
     if("gossip" == algorithm){
@@ -325,14 +326,18 @@ object project2 {
     var numActorStartSendingMessage = 0
     var activeNodeList: List[String] = Nil
     
+    var startTime : Long = 0
+    var endTime : Long = 0
+    
     var nodes = new ListBuffer[ActorRef]()
     var numNodes = 0
     var system: ActorSystem = null
     def receive = {
-      case IntializeChecker(_nodes, _numNodes, _system) => {
+      case IntializeChecker(_nodes, _numNodes, _system, _startTime) => {
         nodes = _nodes
         numNodes = _numNodes
         system = _system
+        startTime = _startTime
         for(i <-0 to numNodes-1)
           activeNodeList = activeNodeList ::: List(nodes(i).path.name)
       }
@@ -341,6 +346,9 @@ object project2 {
         numActorStartSendingMessage += 1
         if(numActorStartSendingMessage == numNodes){
           writer.println("convergence. Situation 1.")
+          endTime = System.currentTimeMillis()
+          var elaspedTime = endTime-startTime
+          println("elasped_time: "+elaspedTime)
           system.shutdown()
           writer.close()
         }
@@ -352,6 +360,9 @@ object project2 {
         println("still active nodes:"+activeNodeList.size)
         if (0 == activeNodeList.size) {
           writer.println("convergence. Situation 2.")
+          endTime = System.currentTimeMillis()
+          var elaspedTime = endTime-startTime
+          println("elasped_time: "+elaspedTime)
           system.shutdown()
           writer.close()
         }
