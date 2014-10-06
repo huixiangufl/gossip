@@ -15,3 +15,4 @@ Table of Contents
 1. Setup and exection.
 The following instruction indicates how to run the program. It 
 assumes that the system has a scala and a SBT (Simple Build Tool) installed.
+
