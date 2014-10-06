@@ -48,8 +48,7 @@ object project2 {
       println("Invalid number of arguments. Run with numNodes, topology and algorithm")
       System.exit(1)
     }
-    
-    
+        
     val writer = new PrintWriter("test.txt")
 
     var numNodes: Int = args(0).toInt
@@ -84,7 +83,6 @@ object project2 {
         if("push-sum" == algorithm)
           nodes(i) ! IntializePushSumNode(nodes, neighborList, numNodes, i, 1, changeLimit, checker, topology, system)
       }
-
     } else if ("2D" == topology) {
       var gridSize: Int = sqrt(numNodes.toDouble).ceil.toInt
       for(i <- 0 to gridSize-1){
@@ -226,7 +224,7 @@ object project2 {
         s = _s
         w = _w
         changeLimit = _changeLimit
-        sumEstimate = s/w
+        sumEstimate = s / w
         checker = _checker
         topology = _topology
         system = _system
@@ -240,14 +238,6 @@ object project2 {
         } else if (sender() != self && receivedMessages < rumorLimit && neighborList.size > 0) {
           receivedMessages += 1
           if (receivedMessages == rumorLimit) {
-//            //to solve problem in line topo: 0-1-2-3-4-5, when 0 and 1 receives enough messages and dead
-//            //the rest of the network cannot receive gossip any more, and stuck
-//            if ("line" == topology) {
-//              for (i <- 0 to neighborList.size - 1) {
-//                if (0 == nodes(neighborList(i)).receivedMessages)
-//                  nodes(neighborList(i)) ! ReceiveGossip()
-//              }
-//            }
             //send the checker to check the number of active actors
             checker ! CheckActiveActor()
             //update the neighbor list of all current actor's neighbors
@@ -263,7 +253,7 @@ object project2 {
         if(sender() == self && receivedMessages < rumorLimit && neighborList.size > 0){
           //send message to a random neighbor
           var randNeighbor = neighborList(Random.nextInt(neighborList.size))
-          writer.println(self.path.name + " to "+nodes(randNeighbor).path.name+" messages account: "+receivedMessages)
+          //writer.println(self.path.name + " to "+nodes(randNeighbor).path.name+" messages account: "+receivedMessages)
           nodes(randNeighbor) ! ReceiveGossip()
         }
       }
@@ -275,7 +265,8 @@ object project2 {
           w += _w
           sumEstimate = s/w
           context.system.scheduler.schedule(0 milliseconds, 1 milliseconds, self, SendPushSum(s, w))
-        } else if(sender() != self && changeCounter < changeLimit && neighborList.size > 0){
+        //} else if(sender() != self && changeCounter < changeLimit && neighborList.size > 0){
+        } else if(sender() != self && neighborList.size > 0){
           receivedMessages += 1
           var oldSumEstimate: Double = s/w
           
@@ -292,6 +283,7 @@ object project2 {
           
           if(changeCounter >= changeLimit){
             writer.println("sum estimate for "+self.path.name+ " while dying is: "+sumEstimate)
+            //println("sum estimate for "+self.path.name+ " while dying is: "+sumEstimate)
             //deactive this actor
             checker ! CheckActiveActor()
             for(i <- 0 to neighborList.size-1)
@@ -302,14 +294,14 @@ object project2 {
       }
       
       case SendPushSum(_s: Double, _w: Double) => {
-        if(sender() == self && changeCounter < changeLimit && neighborList.size > 0){
+//        if(sender() == self && changeCounter < changeLimit && neighborList.size > 0){
+        if(sender() == self && neighborList.size > 0){
           s = s/2
           w = w/2
           var randNeighbor = neighborList(Random.nextInt(neighborList.size))
           nodes(randNeighbor) ! ReceivePushSum(s, w)
         }
       }
-
       
       case UpdateNeighborList(nodeName) => {
         neighborList = neighborList.filter(x => x != nodeName.toInt)
@@ -350,6 +342,7 @@ object project2 {
           endTime = System.currentTimeMillis()
           var elaspedTime = endTime-startTime
           println("elasped_time: "+elaspedTime)
+          writer.println("elapsed_time: "+elaspedTime)
           system.shutdown()
           writer.close()
         }
@@ -358,12 +351,14 @@ object project2 {
       case CheckActiveActor() => {
         writer.println("checkActiveActor" + sender().path.name)
         activeNodeList = activeNodeList.filter(x => x != sender().path.name)
-        println("still active nodes:"+activeNodeList.size)
+        //println("still active nodes:"+activeNodeList.size)
+        writer.println("still active nodes:"+activeNodeList.size+" "+sender())
         if (0 == activeNodeList.size) {
           writer.println("convergence. Situation 2.")
           endTime = System.currentTimeMillis()
           var elaspedTime = endTime-startTime
-          println("elasped_time: "+elaspedTime)
+          println("elasped_time: "+elaspedTime+" "+sender()+" activeNode size: "+activeNodeList.size)
+          writer.println("elasped_time: "+elaspedTime+" "+sender()+" activeNode size: "+activeNodeList.size)
           system.shutdown()
           writer.close()
         }
