@@ -97,7 +97,6 @@ object project2 {
       }
       
     } else if ("line" == topology) {  
-      //asssume the numNodes cannot be 1
       for(i <- 0 to numNodes-1) {
         var neighborList: List[Int] = Nil
         if(0 == i)
@@ -137,7 +136,6 @@ object project2 {
     val startTime = System.currentTimeMillis()
     checker ! IntializeChecker(nodes, numNodes, system, startTime)
     
-    //select a random node and start spreading messages
     if("gossip" == algorithm){
       nodes(Random.nextInt(nodes.size)) ! ReceiveGossip()
     }else if("push-sum" == algorithm){
@@ -148,7 +146,6 @@ object project2 {
     }
   }
   
-  //generate a random number between first to current-1 and current+1 to last
   def genRandExceptCur(first: Int, last: Int, current: Int): Int = {
     val range1 = first to current-1
     val range2 = current+1 to last
@@ -195,10 +192,8 @@ object project2 {
     var system: ActorSystem = null
     var receivedMessages: Int = 0
     
-    //variables for gossip algorithm
     var rumorLimit: Int = 0
     
-    //variables for push-sum algorithm
     var s: Double = 0
     var w: Double = 0
     var changeCounter: Int = 0
@@ -238,22 +233,17 @@ object project2 {
         } else if (sender() != self && receivedMessages < rumorLimit && neighborList.size > 0) {
           receivedMessages += 1
           if (receivedMessages == rumorLimit) {
-            //send the checker to check the number of active actors
             checker ! CheckActiveActor()
-            //update the neighbor list of all current actor's neighbors
             for (i <- 0 to neighborList.size - 1)
               nodes(neighborList(i)) ! UpdateNeighborList(self.path.name)
-            //from now on, this actor is dead: 
-            //we don't kill it, but it can't send and receive messages because of (receivedMessages < rumorLimit) condition 
           }
         }
       }
       
       case SendGossip() => {
         if(sender() == self && receivedMessages < rumorLimit && neighborList.size > 0){
-          //send message to a random neighbor
           var randNeighbor = neighborList(Random.nextInt(neighborList.size))
-          //writer.println(self.path.name + " to "+nodes(randNeighbor).path.name+" messages account: "+receivedMessages)
+		  writer.println(self.path.name + " to "+nodes(randNeighbor).path.name+" messages account: "+receivedMessages)
           nodes(randNeighbor) ! ReceiveGossip()
         }
       }
@@ -265,7 +255,6 @@ object project2 {
           w += _w
           sumEstimate = s/w
           context.system.scheduler.schedule(0 milliseconds, 1 milliseconds, self, SendPushSum(s, w))
-        //} else if(sender() != self && changeCounter < changeLimit && neighborList.size > 0){
         } else if(sender() != self && neighborList.size > 0){
           receivedMessages += 1
           var oldSumEstimate: Double = s/w
@@ -273,28 +262,24 @@ object project2 {
           s += _s
           w += _w
           sumEstimate = s/w
-          
-          writer.println("sum estimate for "+self.path.name+ " is: "+sumEstimate)
-          
-          if(Math.abs(sumEstimate - oldSumEstimate) < pushSumThreshold)
-            changeCounter +=1
-            else
-              changeCounter = 0
-          
-          if(changeCounter >= changeLimit){
-            writer.println("sum estimate for "+self.path.name+ " while dying is: "+sumEstimate)
-            //println("sum estimate for "+self.path.name+ " while dying is: "+sumEstimate)
-            //deactive this actor
-            checker ! CheckActiveActor()
-            for(i <- 0 to neighborList.size-1)
-	            nodes(neighborList(i)) ! UpdateNeighborList(self.path.name)
+
+          if(changeCounter < changeLimit){
+              if(Math.abs(sumEstimate - oldSumEstimate) < pushSumThreshold)
+                  changeCounter +=1
+              else
+                  changeCounter = 0
           }
           
+          if(changeCounter == changeLimit){
+            writer.println("sum estimate for "+self.path.name+ " while dying is: "+sumEstimate)
+            changeCounter += 1
+            checker ! CheckActiveActor()
+          }
         }
+
       }
-      
+            
       case SendPushSum(_s: Double, _w: Double) => {
-//        if(sender() == self && changeCounter < changeLimit && neighborList.size > 0){
         if(sender() == self && neighborList.size > 0){
           s = s/2
           w = w/2
@@ -307,8 +292,6 @@ object project2 {
         neighborList = neighborList.filter(x => x != nodeName.toInt)
         if(0 == neighborList.size){
           checker ! CheckActiveActor()
-          //neighorList.size==0 also means this node is dead
-          //we don't kill it, but it cann't send and receive messages because of (neighborList.size > 0) condition
         }
       }
       
@@ -342,23 +325,21 @@ object project2 {
           endTime = System.currentTimeMillis()
           var elaspedTime = endTime-startTime
           println("elasped_time: "+elaspedTime)
-          writer.println("elapsed_time: "+elaspedTime)
+          writer.println(elaspedTime)
           system.shutdown()
           writer.close()
         }
       }
       
       case CheckActiveActor() => {
-        writer.println("checkActiveActor" + sender().path.name)
         activeNodeList = activeNodeList.filter(x => x != sender().path.name)
-        //println("still active nodes:"+activeNodeList.size)
-        writer.println("still active nodes:"+activeNodeList.size+" "+sender())
+        println("still active nodes:"+activeNodeList.size)
         if (0 == activeNodeList.size) {
           writer.println("convergence. Situation 2.")
           endTime = System.currentTimeMillis()
           var elaspedTime = endTime-startTime
-          println("elasped_time: "+elaspedTime+" "+sender()+" activeNode size: "+activeNodeList.size)
-          writer.println("elasped_time: "+elaspedTime+" "+sender()+" activeNode size: "+activeNodeList.size)
+          println("elasped_time: "+elaspedTime)
+          writer.println(elaspedTime)
           system.shutdown()
           writer.close()
         }
